@@ -1,0 +1,24 @@
+RÈGLE À AJOUTER DANS TES FIRESTORE RULES EXISTANTES (posty78-maps)
+===================================================================
+
+⚠️ Ne remplace PAS tes règles actuelles : ajoute juste ce bloc à l'intérieur
+de ton "service cloud.firestore { match /databases/{database}/documents { ... } }",
+en conservant impérativement la règle existante "/project/{document}".
+
+    match /consentements/{document} {
+      allow create: if request.resource.data.keys().hasOnly(['horodatage', 'etape', 'geoloc', 'userAgent', 'versionTexte'])
+                    && request.resource.data.etape is int;
+      allow read, update, delete: if false; // seul toi (via la console Firebase) peux consulter/gérer
+    }
+
+Pourquoi :
+- "create" ouvert à tout le monde (n'importe qui peut écrire une preuve de consentement
+  sans être connecté — normal, le participant n'a pas de compte).
+- "read/update/delete" fermé à tout le monde côté client : tu consultes les preuves
+  uniquement depuis la console Firebase (onglet Firestore), ce qui évite que quelqu'un
+  puisse lire, modifier ou supprimer les preuves de consentement des autres depuis le site.
+- Le hasOnly() empêche l'ajout de champs parasites dans les documents.
+
+Si un jour tu veux consulter les preuves depuis un petit panel admin (comme sur tes
+autres projets, avec le login 5-tap), on ajoutera une règle "allow read: if
+request.auth.uid == 'TON_UID_ADMIN';" à ce moment-là.
