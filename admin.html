@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>rgpd.posty78.fr</title>
+<style>
+  :root{
+    --green:#00cc44;
+    --bg:#0a0a0a;
+    --card:#141414;
+    --text:#f0f0f0;
+    --muted:#8a8a8a;
+    --border:rgba(255,255,255,0.08);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh;
+  }
+  /* Écran public neutre — rien ne trahit qu'il existe un accès admin */
+  #publicScreen{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    text-align:center;
+    padding:24px;
+  }
+  #logoTap{
+    font-size:15px;
+    color:var(--muted);
+    user-select:none;
+    cursor:default;
+    padding:20px;
+  }
+  #loginBox{
+    display:none;
+    max-width:340px;
+    margin:80px auto 0;
+    padding:24px;
+    background:var(--card);
+    border-radius:14px;
+    border:1px solid var(--border);
+  }
+  #loginBox.show{display:block;}
+  #loginBox input{
+    width:100%;
+    padding:12px;
+    margin-bottom:10px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background:#0e0e0e;
+    color:var(--text);
+    font-size:15px;
+  }
+  #loginBox button{
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:8px;
+    background:var(--green);
+    color:#031a0a;
+    font-weight:700;
+    font-size:15px;
+    cursor:pointer;
+  }
+  #loginError{color:#ff5c5c; font-size:13px; margin-top:8px; min-height:16px;}
+
+  /* Dashboard admin */
+  #admin{display:none; max-width:960px; margin:0 auto; padding:24px 16px 80px;}
+  #admin.show{display:block;}
+  .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;}
+  .topbar h1{font-size:19px; margin:0;}
+  .topbar h1 span{color:var(--green);}
+  .btn{
+    padding:9px 16px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background:var(--card);
+    color:var(--text);
+    font-size:13px;
+    cursor:pointer;
+  }
+  .btn.primary{background:var(--green); color:#031a0a; border:none; font-weight:700;}
+  .toolbar{display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap;}
+  .stat{
+    background:var(--card);
+    border-radius:12px;
+    padding:14px 18px;
+    border:1px solid var(--border);
+    font-size:13px;
+    color:var(--muted);
+  }
+  .stat b{color:var(--green); font-size:20px; display:block;}
+  table{width:100%; border-collapse:collapse; font-size:13px; margin-top:16px;}
+  th, td{padding:10px 8px; text-align:left; border-bottom:1px solid var(--border);}
+  th{color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.03em;}
+  td a{color:var(--green); text-decoration:none;}
+  #tableWrap{overflow-x:auto;}
+  #loadingMsg, #emptyMsg{color:var(--muted); font-size:14px; margin-top:20px;}
+</style>
+</head>
+<body>
+
+<div id="publicScreen">
+  <div id="logoTap">rgpd.posty78.fr</div>
+</div>
+
+<div id="loginBox">
+  <input type="email" id="email" placeholder="Email admin" autocomplete="username">
+  <input type="password" id="password" placeholder="Mot de passe" autocomplete="current-password">
+  <button id="loginBtn">Se connecter</button>
+  <div id="loginError"></div>
+</div>
+
+<div id="admin">
+  <div class="topbar">
+    <h1>Preuves de <span>consentement</span></h1>
+    <button class="btn" id="logoutBtn">Déconnexion</button>
+  </div>
+  <div class="toolbar">
+    <div class="stat"><b id="countStat">—</b>autorisations enregistrées</div>
+    <button class="btn primary" id="exportBtn">Exporter en CSV</button>
+    <button class="btn" id="refreshBtn">Rafraîchir</button>
+  </div>
+  <div id="loadingMsg">Chargement…</div>
+  <div id="emptyMsg" style="display:none;">Aucune autorisation enregistrée pour le moment.</div>
+  <div id="tableWrap"></div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getFirestore, collection, query, orderBy, getDocs
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAMpcR8oV6kCDPHwoPiCZky8JriA9TiRuc",
+    authDomain: "posty78-maps.firebaseapp.com",
+    projectId: "posty78-maps",
+    storageBucket: "posty78-maps.firebasestorage.app",
+    messagingSenderId: "264681377127",
+    appId: "1:264681377127:web:59cc8c638a03c0ef9cb3c2"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const ADMIN_UID = "P0bZ13Zs67PICnJiieYXiPgoGWs2";
+
+  // --- 5-tap pour révéler le formulaire de connexion ---
+  let tapCount = 0;
+  let tapTimer = null;
+  document.getElementById("logoTap").addEventListener("click", () => {
+    tapCount++;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => { tapCount = 0; }, 1500);
+    if (tapCount >= 5) {
+      tapCount = 0;
+      document.getElementById("publicScreen").style.display = "none";
+      document.getElementById("loginBox").classList.add("show");
+    }
+  });
+
+  document.getElementById("loginBtn").addEventListener("click", async () => {
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    const errBox = document.getElementById("loginError");
+    errBox.textContent = "";
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (e) {
+      errBox.textContent = "Connexion refusée.";
+    }
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", () => signOut(auth));
+
+  let allDocs = [];
+
+  onAuthStateChanged(auth, (user) => {
+    const isAdmin = user && user.uid === ADMIN_UID;
+    document.getElementById("loginBox").classList.remove("show");
+    document.getElementById("publicScreen").style.display = isAdmin ? "none" : "flex";
+    document.getElementById("admin").classList.toggle("show", isAdmin);
+    if (isAdmin) loadData();
+  });
+
+  async function loadData(){
+    document.getElementById("loadingMsg").style.display = "block";
+    document.getElementById("emptyMsg").style.display = "none";
+    document.getElementById("tableWrap").innerHTML = "";
+
+    const q = query(collection(db, "consentements"), orderBy("horodatage", "desc"));
+    const snap = await getDocs(q);
+    allDocs = [];
+    snap.forEach(d => allDocs.push({ id: d.id, ...d.data() }));
+
+    document.getElementById("loadingMsg").style.display = "none";
+    document.getElementById("countStat").textContent = allDocs.length;
+
+    if (allDocs.length === 0) {
+      document.getElementById("emptyMsg").style.display = "block";
+      return;
+    }
+    renderTable(allDocs);
+  }
+
+  function fmtDate(ts){
+    if (!ts) return "—";
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleString("fr-FR");
+  }
+
+  function renderTable(docs){
+    let html = "<table><thead><tr><th>Date</th><th>Étape</th><th>Localisation</th><th>Précision</th><th>Appareil</th><th>Version</th></tr></thead><tbody>";
+    docs.forEach(d => {
+      const geo = d.geoloc
+        ? `<a href="https://maps.google.com/?q=${d.geoloc.lat},${d.geoloc.lng}" target="_blank">${d.geoloc.lat.toFixed(5)}, ${d.geoloc.lng.toFixed(5)}</a>`
+        : "—";
+      const precision = d.geoloc && d.geoloc.precision ? Math.round(d.geoloc.precision) + " m" : "—";
+      const ua = (d.userAgent || "—").slice(0, 40);
+      html += `<tr>
+        <td>${fmtDate(d.horodatage)}</td>
+        <td>#${d.etape ?? "—"}</td>
+        <td>${geo}</td>
+        <td>${precision}</td>
+        <td>${ua}</td>
+        <td>${d.versionTexte || "—"}</td>
+      </tr>`;
+    });
+    html += "</tbody></table>";
+    document.getElementById("tableWrap").innerHTML = html;
+  }
+
+  document.getElementById("refreshBtn").addEventListener("click", loadData);
+
+  document.getElementById("exportBtn").addEventListener("click", () => {
+    if (allDocs.length === 0) return;
+    const rows = [["id","date","etape","lat","lng","precision_m","userAgent","versionTexte"]];
+    allDocs.forEach(d => {
+      rows.push([
+        d.id,
+        fmtDate(d.horodatage),
+        d.etape ?? "",
+        d.geoloc ? d.geoloc.lat : "",
+        d.geoloc ? d.geoloc.lng : "",
+        d.geoloc ? Math.round(d.geoloc.precision || 0) : "",
+        (d.userAgent || "").replace(/,/g,";"),
+        d.versionTexte || ""
+      ]);
+    });
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "consentements_posty78_" + new Date().toISOString().slice(0,10) + ".csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+</script>
+
+</body>
+</html>
